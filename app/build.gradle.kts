@@ -3,10 +3,11 @@ plugins {
 }
 
 android {
+    enableKotlin = false
     namespace = "io.github.vvb2060.ims"
     defaultConfig {
-        versionCode = 5
-        versionName = "3.0"
+        versionCode = 6
+        versionName = "3.1"
     }
     buildTypes {
         release {

@@ -2,6 +2,8 @@ package io.github.vvb2060.ims;
 
 import static io.github.vvb2060.ims.PrivilegedProcess.TAG;
 
+import android.annotation.NonNull;
+import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.app.IActivityManager;
 import android.app.UiAutomationConnection;
@@ -12,10 +14,18 @@ import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Parcel;
+import android.os.PersistableBundle;
 import android.os.Process;
+import android.os.RemoteException;
 import android.os.ServiceManager;
+import android.os.UserHandle;
 import android.system.Os;
+import android.telephony.CarrierConfigManager;
+import android.telephony.SubscriptionManager;
+import android.telephony.ims.ProvisioningManager;
 import android.util.Log;
+
+import com.android.internal.telephony.ITelephony;
 
 import org.lsposed.hiddenapibypass.LSPass;
 
@@ -30,17 +40,24 @@ public class ShizukuProvider extends rikka.shizuku.ShizukuProvider {
     private boolean skip = false;
 
     @Override
-    public Bundle call(String method, String arg, Bundle extras) {
+    public Bundle call(@NonNull String method, String arg, Bundle extras) {
+        if (UserHandle.myUserId() != UserHandle.USER_SYSTEM) {
+            return new Bundle();
+        }
         var sdkUid = Process.toSdkSandboxUid(Os.getuid());
         var callingUid = Binder.getCallingUid();
-        if (callingUid != sdkUid && callingUid != Process.SHELL_UID) {
+        if (callingUid != sdkUid && callingUid != Process.SHELL_UID
+                && callingUid != Process.ROOT_UID) {
             return new Bundle();
         }
 
         if (METHOD_SEND_BINDER.equals(method)) {
             Shizuku.addBinderReceivedListener(() -> {
                 if (!skip && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
-                    startInstrument(getContext());
+                    showVoLTE();
+                    var context = getContext();
+                    assert context != null;
+                    if (needOverride(context)) startInstrument(context, canPersistent(context));
                 }
             });
         } else if (METHOD_GET_BINDER.equals(method) && callingUid == sdkUid && extras != null) {
@@ -69,17 +86,82 @@ public class ShizukuProvider extends rikka.shizuku.ShizukuProvider {
         }
     }
 
-    private static void startInstrument(Context context) {
+    private static void startInstrument(Context context, boolean sdkSandbox) {
         try {
             var binder = ServiceManager.getService(Context.ACTIVITY_SERVICE);
             var am = IActivityManager.Stub.asInterface(new ShizukuBinderWrapper(binder));
             var name = new ComponentName(context, PrivilegedProcess.class);
             var flags = ActivityManager.INSTR_FLAG_DISABLE_HIDDEN_API_CHECKS;
-            flags |= ActivityManager.INSTR_FLAG_INSTRUMENT_SDK_SANDBOX;
+            if (sdkSandbox) {
+                flags |= ActivityManager.INSTR_FLAG_INSTRUMENT_SDK_SANDBOX;
+            } else {
+                flags |= ActivityManager.INSTR_FLAG_NO_RESTART;
+            }
+            var args = new Bundle();
+            args.putInt("pid", Process.myPid());
             var connection = new UiAutomationConnection();
-            am.startInstrumentation(name, null, flags, new Bundle(), null, connection, 0, null);
+            am.startInstrumentation(name, null, flags, args, null, connection, 0, null);
         } catch (Exception e) {
             Log.e(TAG, Log.getStackTraceString(e));
+        }
+    }
+
+    private static boolean needOverride(Context context) {
+        var cm = context.getSystemService(CarrierConfigManager.class);
+        var sm = context.getSystemService(SubscriptionManager.class);
+        try {
+            var list = sm.getActiveSubscriptionInfoList();
+            if (list == null || list.isEmpty()) {
+                return true;
+            }
+            for (var subinfo : list) {
+                var subId = subinfo.getSubscriptionId();
+                var bundle = cm.getConfigForSubId(subId, "vvb2060_config_version");
+                if (bundle.getInt("vvb2060_config_version", 0) != BuildConfig.VERSION_CODE) {
+                    return true;
+                }
+            }
+            Log.i(TAG, "no need to override carrier config");
+            return false;
+        } catch (SecurityException e) {
+            return true;
+        }
+    }
+
+    @SuppressLint("PrivateApi")
+    private static boolean canPersistent(Context context) {
+        try {
+            var phone = context.createPackageContext("com.android.phone",
+                    Context.CONTEXT_INCLUDE_CODE | Context.CONTEXT_IGNORE_SECURITY);
+            var clazz = phone.getClassLoader().loadClass("com.android.phone.CarrierConfigLoader");
+            try {
+                clazz.getDeclaredMethod("isSystemApp");
+            } catch (NoSuchMethodException e) {
+                return true;
+            }
+            clazz.getDeclaredMethod("secureOverrideConfig", PersistableBundle.class, boolean.class);
+            try {
+                clazz.getDeclaredMethod("isSdkSandboxUidInternal", int.class);
+                return false;
+            } catch (NoSuchMethodException e) {
+                return true;
+            }
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static void showVoLTE() {
+        var subId = SubscriptionManager.getDefaultVoiceSubscriptionId();
+        var binder = ServiceManager.getService(Context.TELEPHONY_SERVICE);
+        var phone = ITelephony.Stub.asInterface(new ShizukuBinderWrapper(binder));
+        try {
+            var value = phone.getImsProvisioningInt(subId, ProvisioningManager.KEY_VOIMS_OPT_IN_STATUS);
+            if (value == ProvisioningManager.PROVISIONING_VALUE_ENABLED) return;
+            phone.setImsProvisioningInt(subId, ProvisioningManager.KEY_VOIMS_OPT_IN_STATUS,
+                    ProvisioningManager.PROVISIONING_VALUE_ENABLED);
+        } catch (RemoteException e) {
+            Log.w(TAG, Log.getStackTraceString(e));
         }
     }
 }

@@ -6,6 +6,8 @@
         android:name=".PrivilegedProcess"
         android:targetPackage="${applicationId}" />
 
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
     <application
         android:label="Ims"
         android:theme="@android:style/Theme.DeviceDefault.DayNight"
@@ -15,7 +17,8 @@
             android:name=".ShizukuProvider"
             android:authorities="${applicationId}.shizuku"
             android:exported="true"
-            android:multiprocess="false" />
+            android:multiprocess="false"
+            tools:ignore="ExportedContentProvider" />
     </application>
 
     <overlay

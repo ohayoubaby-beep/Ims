@@ -11,8 +11,10 @@ pluginManagement {
         gradlePluginPortal()
     }
     plugins {
-        id("com.android.application") version "8.13.2"
-        id("com.android.library") version "8.13.2"
+        val agp = "9.2.0"
+        id("com.android.application") version agp
+        id("com.android.library") version agp
+        id("com.android.settings") version agp
     }
 }
 
@@ -31,20 +33,20 @@ dependencyResolutionManagement {
 }
 
 plugins {
-    id("com.android.settings") version "8.13.2"
+    id("com.android.settings")
 }
 
 android {
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
     minSdk {
-        version = release(33)
+        version = release(34)
     }
     targetSdk {
-        version = release(36)
+        version = release(37)
     }
-    buildToolsVersion = "36.1.0"
+    buildToolsVersion = "37.0.0"
 }
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
