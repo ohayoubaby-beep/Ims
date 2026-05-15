@@ -109,8 +109,10 @@ public class PrivilegedProcess extends Instrumentation {
     private static PersistableBundle getConfig() {
         var bundle = new PersistableBundle();
         bundle.putBoolean(CarrierConfigManager.KEY_SHOW_IMS_REGISTRATION_STATUS_BOOL, true);
-        //bundle.putString(CarrierConfigManager.KEY_SIM_COUNTRY_ISO_OVERRIDE_STRING, "jp");
-
+        bundle.putString(CarrierConfigManager.KEY_SIM_COUNTRY_ISO_OVERRIDE_STRING, "us");
+        bundle.putBoolean(CarrierConfigManager.KEY_ALLOW_ADDING_APNS_BOOL, true);
+        bundle.putBoolean(CarrierConfigManager.KEY_APN_EXPAND_BOOL, true);
+        
         bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_VOLTE_AVAILABLE_BOOL, true);
         bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_SUPPORTS_SS_OVER_UT_BOOL, true);
         bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_VT_AVAILABLE_BOOL, true);
